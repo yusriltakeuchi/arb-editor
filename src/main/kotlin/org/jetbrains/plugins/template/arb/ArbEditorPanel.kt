@@ -18,18 +18,26 @@ import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.table.JBTable
+import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.regex.PatternSyntaxException
 import javax.swing.BorderFactory
+import javax.swing.Box
+import javax.swing.BoxLayout
 import javax.swing.DefaultCellEditor
 import javax.swing.JButton
 import javax.swing.JLabel
@@ -66,6 +74,12 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
     private val searchField = SearchTextField()
     private var rowSorter: TableRowSorter<ArbTableModel>? = null
     private val statusLabel = JBLabel(" ")
+
+    /** Welcome / recent-folders panel, shown when no folder is loaded. */
+    private val welcomePanel = JPanel(BorderLayout())
+
+    /** Scroll pane wrapping the table, shown after a folder is loaded. */
+    private val tableScrollPane = JBScrollPane(table)
 
     private val folderBtn = JButton("Select ARB Folder", AllIcons.Nodes.Folder).apply {
         toolTipText = "Choose a folder containing .arb files"
@@ -177,9 +191,184 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         }
 
         add(topPanel,            BorderLayout.NORTH)
-        add(JBScrollPane(table), BorderLayout.CENTER)
+        add(welcomePanel,        BorderLayout.CENTER)
         add(JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).also { it.add(statusLabel) },
             BorderLayout.SOUTH)
+
+        // Show welcome / recent folders on initial load
+        refreshWelcomePanel()
+    }
+
+    // ── Welcome / Recent Folders Panel ────────────────────────────────────────
+
+    /** Rebuilds the welcome panel with the latest recent-folder entries. */
+    private fun refreshWelcomePanel() {
+        welcomePanel.removeAll()
+
+        val center = JPanel(GridBagLayout())
+        val gbc = GridBagConstraints().apply {
+            gridx = 0; gridy = 0
+            anchor = GridBagConstraints.CENTER
+            insets = JBUI.emptyInsets()
+        }
+
+        // ── Title ──
+        center.add(JLabel("ARB Editor").apply {
+            font = font.deriveFont(java.awt.Font.BOLD, 18f)
+            horizontalAlignment = SwingConstants.CENTER
+        }, gbc)
+
+        gbc.gridy++
+        gbc.insets = JBUI.insets(4, 0, 16, 0)
+        center.add(JLabel("Select a folder or open a recent project").apply {
+            foreground = JBColor.GRAY
+            horizontalAlignment = SwingConstants.CENTER
+        }, gbc)
+
+        // ── Recent entries ──
+        val recentService = RecentFolderService.getInstance(project)
+        val entries = recentService.getRecentEntries()
+
+        if (entries.isNotEmpty()) {
+            gbc.gridy++
+            gbc.insets = JBUI.insetsBottom(8)
+            gbc.anchor = GridBagConstraints.WEST
+            center.add(JLabel("Recent Folders").apply {
+                font = font.deriveFont(java.awt.Font.BOLD, 13f)
+            }, gbc)
+
+            val dateFmt = SimpleDateFormat("dd MMM yyyy, HH:mm")
+
+            for (entry in entries) {
+                gbc.gridy++
+                gbc.insets = JBUI.insetsBottom(4)
+                gbc.fill = GridBagConstraints.HORIZONTAL
+                gbc.weightx = 1.0
+
+                val folderName = File(entry.path).name
+                val folderPath = entry.path
+                val dateStr = dateFmt.format(Date(entry.lastOpened))
+                val existsOnDisk = File(entry.path).isDirectory
+
+                val cardBg = if (existsOnDisk)
+                    JBColor(Color(245, 247, 255), Color(50, 52, 62))
+                else
+                    JBColor(Color(250, 240, 240), Color(60, 48, 48))
+
+                val cardHoverBg = JBColor(Color(232, 236, 255), Color(58, 62, 75))
+
+                val card = JPanel(BorderLayout(8, 2)).apply {
+                    isOpaque = true
+                    background = cardBg
+                    border = BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(
+                            JBColor(Color(220, 224, 240), Color(65, 68, 80)), 1, true
+                        ),
+                        BorderFactory.createEmptyBorder(8, 12, 8, 12)
+                    )
+                    cursor = if (existsOnDisk)
+                        Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                    else
+                        Cursor.getDefaultCursor()
+
+                    // Left: folder icon + name + path
+                    val leftPanel = JPanel().apply {
+                        isOpaque = false
+                        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                        add(JLabel(folderName, AllIcons.Nodes.Folder, SwingConstants.LEFT).apply {
+                            font = font.deriveFont(java.awt.Font.BOLD, 13f)
+                            if (!existsOnDisk) foreground = JBColor.GRAY
+                        })
+                        add(Box.createVerticalStrut(2))
+                        add(JLabel(folderPath).apply {
+                            font = font.deriveFont(11f)
+                            foreground = JBColor.GRAY
+                        })
+                    }
+
+                    // Right: stats + date
+                    val statsText = if (existsOnDisk) {
+                        buildString {
+                            append("${entry.totalKeys} keys · ${entry.languageCount} lang")
+                            if (entry.missingCount > 0)
+                                append(" · ${entry.missingCount} missing")
+                            else
+                                append(" · all present")
+                        }
+                    } else {
+                        "Folder not found"
+                    }
+
+                    val statsFg = if (!existsOnDisk)
+                        JBColor(Color(180, 80, 80), Color(200, 100, 100))
+                    else if (entry.missingCount > 0)
+                        JBColor(Color(180, 130, 50), Color(220, 180, 80))
+                    else
+                        JBColor(Color(60, 140, 80), Color(100, 190, 120))
+
+                    val rightPanel = JPanel().apply {
+                        isOpaque = false
+                        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                        add(JLabel(statsText).apply {
+                            font = font.deriveFont(11f)
+                            foreground = statsFg
+                            horizontalAlignment = SwingConstants.RIGHT
+                            alignmentX = RIGHT_ALIGNMENT
+                        })
+                        add(Box.createVerticalStrut(2))
+                        add(JLabel(dateStr).apply {
+                            font = font.deriveFont(10f)
+                            foreground = JBColor.GRAY
+                            horizontalAlignment = SwingConstants.RIGHT
+                            alignmentX = RIGHT_ALIGNMENT
+                        })
+                    }
+
+                    add(leftPanel, BorderLayout.CENTER)
+                    add(rightPanel, BorderLayout.EAST)
+
+                    if (existsOnDisk) {
+                        val folderFile = File(entry.path)
+                        addMouseListener(object : MouseAdapter() {
+                            override fun mouseClicked(e: MouseEvent) {
+                                openFolder(folderFile)
+                            }
+                            override fun mouseEntered(e: MouseEvent) {
+                                (e.source as JPanel).background = cardHoverBg
+                            }
+                            override fun mouseExited(e: MouseEvent) {
+                                (e.source as JPanel).background = cardBg
+                            }
+                        })
+                    }
+                }
+                center.add(card, gbc)
+            }
+
+            gbc.fill = GridBagConstraints.NONE
+            gbc.weightx = 0.0
+        }
+
+        // ── "Open ARB Folder" button at the bottom ──
+        gbc.gridy++
+        gbc.insets = JBUI.insetsTop(16)
+        gbc.anchor = GridBagConstraints.CENTER
+        gbc.fill = GridBagConstraints.NONE
+        center.add(JButton("Open ARB Folder…", AllIcons.Nodes.Folder).apply {
+            addActionListener { selectFolder() }
+        }, gbc)
+
+        welcomePanel.add(center, BorderLayout.CENTER)
+        welcomePanel.revalidate()
+        welcomePanel.repaint()
+    }
+
+    /** Switch from welcome panel to table view. */
+    private fun showTableView() {
+        remove(welcomePanel)
+        add(tableScrollPane, BorderLayout.CENTER)
+        revalidate()
+        repaint()
     }
 
     // ── Folder ────────────────────────────────────────────────────────────────
@@ -190,10 +379,16 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             description = "Choose the directory that contains your .arb translation files"
         }
         FileChooser.chooseFile(descriptor, project, null)?.let { vf ->
-            currentDir = File(vf.path)
-            updateFolderButton()
-            reload()
+            openFolder(File(vf.path))
         }
+    }
+
+    /** Opens a folder by path — used both from the chooser and from recent entries. */
+    private fun openFolder(dir: File) {
+        currentDir = dir
+        updateFolderButton()
+        reload()
+        showTableView()
     }
 
     private fun updateFolderButton() {
@@ -217,6 +412,23 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         arbFiles = newFiles
         bindTableModel()
         updateStatus()
+        recordRecentFolder()
+    }
+
+    /** Records the current folder + stats into the recent-folders service. */
+    private fun recordRecentFolder() {
+        val dir = currentDir ?: return
+        val missing = (0 until model.rowCount).sumOf { row ->
+            (0 until model.languages.size).count { lang ->
+                model.getTranslation(row, lang).isBlank()
+            }
+        }
+        RecentFolderService.getInstance(project).recordFolder(
+            path = dir.absolutePath,
+            totalKeys = model.rowCount,
+            languageCount = model.languages.size,
+            missingCount = missing
+        )
     }
 
     private fun bindTableModel() {
