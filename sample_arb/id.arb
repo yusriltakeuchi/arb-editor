@@ -1,0 +1,11 @@
+{
+  "@@locale": "id",
+  "appTitle": "Editor ARB",
+  "welcomeMessage": "Selamat datang, {userName}! Anda memiliki {count} pesan belum dibaca.",
+  "saveButton": "Simpan",
+  "cancelButton": "Batal",
+  "deleteConfirm": "Apakah Anda yakin ingin menghapus {itemName}?",
+  "errorGeneric": "Terjadi kesalahan. Silakan coba lagi.",
+  "successSaved": "Perubahan berhasil disimpan.",
+  "itemCount": "{count} item ditemukan di {category}"
+}

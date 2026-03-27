@@ -1,4 +1,4 @@
-rootProject.name = "IntelliJ Platform Plugin Template"
+rootProject.name = "ARB Editor"
 
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"

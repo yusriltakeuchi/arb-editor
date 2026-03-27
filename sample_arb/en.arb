@@ -1,0 +1,28 @@
+{
+  "@@locale": "en",
+  "appTitle": "ARB Editor",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "welcomeMessage": "Welcome, {userName}! You have {count} unread messages.",
+  "@welcomeMessage": {
+    "description": "The main welcome message shown on the home screen",
+    "placeholders": {
+      "userName": {
+        "type": "String",
+        "example": "John"
+      },
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "saveButton": "Save",
+  "cancelButton": "Cancel",
+  "deleteConfirm": "Are you sure you want to delete {itemName}?",
+  "errorGeneric": "Something went wrong. Please try again.",
+  "successSaved": "Changes saved successfully.",
+  "itemCount": "{count} item(s) found in {category}",
+  "keyMissingInOtherLangs": "This key only exists in English"
+}

@@ -1,15 +1,22 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>org.jetbrains.plugins.template</id>
-    <name>IntelliJ Platform Plugin Template</name>
+    <id>org.jetbrains.plugins.arb-editor</id>
+    <name>ARB Editor</name>
     <vendor>JetBrains</vendor>
+    <description>
+        A synchronized ARB (Application Resource Bundle) translation editor.
+        Open any folder of .arb files and edit all language translations in one
+        table — missing keys are auto-detected and highlighted.
+    </description>
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
-
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="org.jetbrains.plugins.template.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="org.jetbrains.plugins.template.startup.MyProjectActivity" />
+        <toolWindow
+            id="ARB Editor"
+            factoryClass="org.jetbrains.plugins.template.arb.ArbToolWindowFactory"
+            anchor="right"
+            icon="/icons/arb_editor.svg"
+        />
     </extensions>
 </idea-plugin>
