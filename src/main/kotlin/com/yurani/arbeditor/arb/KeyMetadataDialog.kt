@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.arb
+package com.yurani.arbeditor.arb
 
 import com.google.gson.JsonObject
 import com.intellij.openapi.project.Project

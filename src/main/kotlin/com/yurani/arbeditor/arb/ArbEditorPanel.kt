@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.arb
+package com.yurani.arbeditor.arb
 
 import com.google.gson.JsonObject
 import com.intellij.icons.AllIcons
@@ -12,7 +12,9 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.JBColor
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.components.JBLabel
@@ -25,6 +27,7 @@ import java.awt.Component
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Font
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Toolkit
@@ -34,6 +37,7 @@ import java.awt.event.MouseEvent
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 import javax.swing.BorderFactory
 import javax.swing.Box
@@ -68,12 +72,21 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
     /** Keys whose metadata detail row is currently expanded (▴ visible). */
     private val expandedKeys = mutableSetOf<String>()
 
+    /** Placeholder-validation issues keyed by (translationKey, languageCode). */
+    private var validationIssues: Map<Pair<String, String>, PlaceholderIssue> = emptyMap()
+
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private val table       = JBTable()
     private val searchField = SearchTextField()
     private var rowSorter: TableRowSorter<ArbTableModel>? = null
     private val statusLabel = JBLabel(" ")
+
+    /** Prefix filter combo (e.g. "All", "home_", "settings_"). */
+    private val prefixCombo = ComboBox(arrayOf("All")).apply {
+        preferredSize = Dimension(140, preferredSize.height)
+        toolTipText = "Filter keys by prefix group"
+    }
 
     /** Welcome / recent-folders panel, shown when no folder is loaded. */
     private val welcomePanel = JPanel(BorderLayout())
@@ -112,7 +125,52 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             })
         }
 
-        // ── Main toolbar ──────────────────────────────────────────────────────
+        // ── "Tools ▾" popup — less-frequent actions ──────────────────────────
+        val toolsGroup = DefaultActionGroup().apply {
+            templatePresentation.text = "Tools"
+            templatePresentation.icon = AllIcons.General.GearPlain
+            isPopup = true
+            add(object : AnAction("Export CSV", "Export all translations to a CSV file",
+                AllIcons.Actions.Upload) {
+                override fun actionPerformed(e: AnActionEvent) = exportToCsv()
+                override fun update(e: AnActionEvent) { e.presentation.isEnabled = model.rowCount > 0 }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Import CSV", "Import translations from a CSV file",
+                AllIcons.Actions.Download) {
+                override fun actionPerformed(e: AnActionEvent) = importCsv()
+                override fun update(e: AnActionEvent) { e.presentation.isEnabled = currentDir != null }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            addSeparator()
+            add(object : AnAction("Fill from Reference",
+                "Copy a reference language's values into every blank cell of other languages",
+                AllIcons.Actions.Forward) {
+                override fun actionPerformed(e: AnActionEvent) = fillEmptyFromReference()
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = model.languages.size >= 2
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Validate Placeholders",
+                "Check that all translations have matching {placeholder} tokens",
+                AllIcons.General.InspectionsEye) {
+                override fun actionPerformed(e: AnActionEvent) = validatePlaceholders()
+                override fun update(e: AnActionEvent) {
+                    e.presentation.isEnabled = model.languages.size >= 2
+                }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+            add(object : AnAction("Find Duplicates",
+                "Find translation keys with identical values in a chosen language",
+                AllIcons.Actions.Find) {
+                override fun actionPerformed(e: AnActionEvent) = findDuplicates()
+                override fun update(e: AnActionEvent) { e.presentation.isEnabled = model.rowCount > 0 }
+                override fun getActionUpdateThread() = ActionUpdateThread.EDT
+            })
+        }
+
+        // ── Main toolbar (compact: core actions only) ────────────────────────
         val toolbarGroup = DefaultActionGroup().apply {
             add(addGroup)
             add(object : AnAction("Delete Key", "Delete the selected key from all ARB files",
@@ -128,38 +186,23 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
                 override fun update(e: AnActionEvent) { e.presentation.isEnabled = currentDir != null }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            addSeparator()
             add(object : AnAction("Sort A→Z", "Sort translation keys alphabetically",
                 AllIcons.ObjectBrowser.Sorted) {
                 override fun actionPerformed(e: AnActionEvent) = sortKeysAlphabetically()
                 override fun update(e: AnActionEvent) { e.presentation.isEnabled = model.rowCount > 0 }
                 override fun getActionUpdateThread() = ActionUpdateThread.EDT
             })
-            add(object : AnAction("Export CSV", "Export all translations to a CSV file",
-                AllIcons.Actions.Upload) {
-                override fun actionPerformed(e: AnActionEvent) = exportToCsv()
-                override fun update(e: AnActionEvent) { e.presentation.isEnabled = model.rowCount > 0 }
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-            })
-            add(object : AnAction("Fill from Reference",
-                "Copy a reference language's values into every blank cell of other languages",
-                AllIcons.Actions.Forward) {
-                override fun actionPerformed(e: AnActionEvent) = fillEmptyFromReference()
-                override fun update(e: AnActionEvent) {
-                    e.presentation.isEnabled = model.languages.size >= 2
-                }
-                override fun getActionUpdateThread() = ActionUpdateThread.EDT
-            })
+            addSeparator()
+            add(toolsGroup)
         }
 
         val toolbar = ActionManager.getInstance()
             .createActionToolbar("ArbEditorToolbar", toolbarGroup, true)
             .also { it.targetComponent = this }
 
-        // ── Search ────────────────────────────────────────────────────────────
+        // ── Search + Prefix ──────────────────────────────────────────────────
         searchField.apply {
             textEditor.emptyText.setText("Filter keys…")
-            preferredSize = Dimension(220, preferredSize.height)
             textEditor.document.addDocumentListener(object : DocumentListener {
                 override fun insertUpdate(e: DocumentEvent)  = applyFilter()
                 override fun removeUpdate(e: DocumentEvent)  = applyFilter()
@@ -167,11 +210,12 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             })
         }
 
-        // ── Top bar ───────────────────────────────────────────────────────────
-        val topPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+        prefixCombo.addActionListener { applyFilter() }
+
+        // ── Row 1: Folder + Toolbar + Help ───────────────────────────────────
+        val row1 = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
             add(folderBtn)
             add(toolbar.component)
-            add(searchField)
             add(JButton(AllIcons.Actions.Help).apply {
                 toolTipText = "About ARB Editor"
                 isBorderPainted = false
@@ -179,6 +223,24 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
                 preferredSize = Dimension(28, 28)
                 addActionListener { showAboutDialog() }
             })
+        }
+
+        // ── Row 2: Prefix combo + Search field (stretches to fill) ───────────
+        val row2 = JPanel(BorderLayout(6, 0)).apply {
+            border = BorderFactory.createEmptyBorder(2, 4, 2, 4)
+            val filterLeft = JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
+                add(JBLabel("Prefix:"))
+                add(prefixCombo)
+            }
+            add(filterLeft, BorderLayout.WEST)
+            add(searchField, BorderLayout.CENTER)
+        }
+
+        // ── Top panel (both rows stacked vertically) ─────────────────────────
+        val topPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(row1)
+            add(row2)
         }
 
         // ── Table ─────────────────────────────────────────────────────────────
@@ -214,7 +276,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
 
         // ── Title ──
         center.add(JLabel("ARB Editor").apply {
-            font = font.deriveFont(java.awt.Font.BOLD, 18f)
+            font = font.deriveFont(Font.BOLD, 18f)
             horizontalAlignment = SwingConstants.CENTER
         }, gbc)
 
@@ -234,7 +296,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             gbc.insets = JBUI.insetsBottom(8)
             gbc.anchor = GridBagConstraints.WEST
             center.add(JLabel("Recent Folders").apply {
-                font = font.deriveFont(java.awt.Font.BOLD, 13f)
+                font = font.deriveFont(Font.BOLD, 13f)
             }, gbc)
 
             val dateFmt = SimpleDateFormat("dd MMM yyyy, HH:mm")
@@ -276,7 +338,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
                         isOpaque = false
                         layout = BoxLayout(this, BoxLayout.Y_AXIS)
                         add(JLabel(folderName, AllIcons.Nodes.Folder, SwingConstants.LEFT).apply {
-                            font = font.deriveFont(java.awt.Font.BOLD, 13f)
+                            font = font.deriveFont(Font.BOLD, 13f)
                             if (!existsOnDisk) foreground = JBColor.GRAY
                         })
                         add(Box.createVerticalStrut(2))
@@ -433,6 +495,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
 
     private fun bindTableModel() {
         table.model = model
+        validationIssues = emptyMap()    // clear stale validation on reload
 
         // KEY column — inner class renderer, gear pinned to the EAST
         table.columnModel.getColumn(0).apply {
@@ -477,6 +540,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
 
         applyFilter()
         updateRowHeights()
+        updatePrefixOptions()
     }
 
     // ── Row heights (expanded / collapsed) ────────────────────────────────────
@@ -493,12 +557,27 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
     // ── Filter ────────────────────────────────────────────────────────────────
 
     private fun applyFilter() {
-        val text = searchField.text.trim()
+        val text   = searchField.text.trim()
+        val prefix = prefixCombo.selectedItem?.toString() ?: "All"
+
+        val filters = mutableListOf<RowFilter<ArbTableModel, Int>>()
+
+        if (text.isNotEmpty()) {
+            try {
+                filters.add(RowFilter.regexFilter("(?i)${Pattern.quote(text)}", 0))
+            } catch (_: PatternSyntaxException) { /* ignore bad pattern */ }
+        }
+
+        if (prefix != "All") {
+            try {
+                filters.add(RowFilter.regexFilter("^${Pattern.quote(prefix)}", 0))
+            } catch (_: PatternSyntaxException) { /* ignore */ }
+        }
+
         rowSorter?.rowFilter = when {
-            text.isEmpty() -> null
-            else -> try {
-                RowFilter.regexFilter("(?i)${java.util.regex.Pattern.quote(text)}", 0)
-            } catch (_: PatternSyntaxException) { null }
+            filters.isEmpty() -> null
+            filters.size == 1 -> filters[0]
+            else -> RowFilter.andFilter(filters)
         }
         updateRowHeights()
     }
@@ -677,7 +756,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         val descriptor = FileSaverDescriptor("Export Translations", "Save as CSV", "csv")
         val wrapper = FileChooserFactory.getInstance()
             .createSaveFileDialog(descriptor, project)
-            .save(null as com.intellij.openapi.vfs.VirtualFile?, "translations.csv") ?: return
+            .save(null as VirtualFile?, "translations.csv") ?: return
         try {
             ArbService.exportToCsv(model, wrapper.file)
             Messages.showInfoMessage(project,
@@ -751,6 +830,266 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         Messages.showInfoMessage(project,
             "Done — filled $filled cell(s) using '${model.languages[choice]}' as reference.",
             "Fill from Reference")
+    }
+
+    // ── Validate Placeholders ─────────────────────────────────────────────────
+
+    /**
+     * Asks the user to pick a reference language, then validates every
+     * translation cell for matching {placeholder} tokens.  Results are stored
+     * in [validationIssues] and the table is repainted so the renderer can
+     * highlight problematic cells.
+     */
+    private fun validatePlaceholders() {
+        if (model.languages.size < 2) return
+
+        val options = model.languages.toTypedArray()
+        val choice = Messages.showChooseDialog(
+            project,
+            "Pick the reference language.\n\n" +
+            "Every non-blank translation will be checked for matching\n" +
+            "{placeholder} tokens against this reference.",
+            "Validate Placeholders",
+            Messages.getQuestionIcon(),
+            options,
+            options[0]
+        )
+        if (choice < 0) return
+
+        val issues = PlaceholderValidator.validate(model, choice)
+        validationIssues = issues
+        table.repaint()
+
+        if (issues.isEmpty()) {
+            Messages.showInfoMessage(
+                project,
+                "All translations have matching placeholders.\nNo issues found.",
+                "Validation Passed ✓"
+            )
+        } else {
+            val summary = buildString {
+                append("Found ${issues.size} placeholder issue(s):\n\n")
+                issues.values.take(15).forEach { issue ->
+                    append("• ${issue.key} [${issue.language}]: ${issue.summary()}\n")
+                }
+                if (issues.size > 15) append("\n… and ${issues.size - 15} more")
+                append("\n\nAffected cells are now highlighted in the table.")
+            }
+            Messages.showWarningDialog(project, summary, "Placeholder Issues Found")
+        }
+    }
+
+    // ── Import CSV ────────────────────────────────────────────────────────────
+
+    /**
+     * Lets the user pick a CSV file, parses it, shows a merge preview,
+     * and applies changes to the current model + saves to disk.
+     */
+    private fun importCsv() {
+        val dir = currentDir
+        if (dir == null) {
+            Messages.showErrorDialog(project,
+                "Open an ARB folder first before importing.", "No Folder Open")
+            return
+        }
+
+        val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor("csv").apply {
+            title       = "Import CSV"
+            description = "Select a CSV file with translations (header: key, lang1, lang2, …)"
+        }
+        val vf = FileChooser.chooseFile(descriptor, project, null) ?: return
+        val csvFile = File(vf.path)
+
+        val result = try {
+            ArbService.importFromCsv(csvFile)
+        } catch (ex: Exception) {
+            Messages.showErrorDialog(project,
+                "Failed to parse CSV:\n${ex.message}", "Import Error")
+            return
+        }
+
+        if (result == null) {
+            Messages.showErrorDialog(project,
+                "CSV file is empty or has fewer than 2 columns.\n" +
+                "Expected format: key, lang1, lang2, …", "Invalid CSV")
+            return
+        }
+
+        // Preview
+        val existingLangs = result.languages.count { it in model.languages }
+        val newLangs      = result.languages.filter { it !in model.languages }
+        val existingKeys  = result.keys.count { it in model.allKeys }
+        val newKeys       = result.keys.size - existingKeys
+
+        val preview = buildString {
+            append("CSV contains ${result.keys.size} keys in ${result.languages.size} language(s).\n\n")
+            append("• $existingKeys existing keys will be updated\n")
+            append("• $newKeys new keys will be added\n")
+            append("• $existingLangs existing languages matched\n")
+            if (newLangs.isNotEmpty()) {
+                append("• ${newLangs.size} new language(s) will be created: ${newLangs.joinToString(", ")}\n")
+            }
+            append("\nProceed with import?")
+        }
+
+        val confirm = Messages.showYesNoDialog(
+            project, preview, "Import CSV Preview", Messages.getQuestionIcon()
+        )
+        if (confirm != Messages.YES) return
+
+        // Create new language files if needed
+        for (lang in newLangs) {
+            try {
+                ArbService.createLanguageFile(dir, lang, model.allKeys)
+            } catch (ex: Exception) {
+                Messages.showErrorDialog(project,
+                    "Could not create '$lang.arb': ${ex.message}", "Error")
+            }
+        }
+
+        // If there are new languages, reload first to pick up the new .arb files
+        if (newLangs.isNotEmpty()) reload()
+
+        // Merge
+        val (addedKeys, updatedCells, _) = ArbService.mergeCsvIntoModel(result, model)
+
+        // Save
+        isSaving = true
+        try { ArbService.saveAll(model, arbFiles) } finally { isSaving = false }
+        updateStatus()
+        updatePrefixOptions()
+        table.repaint()
+
+        Messages.showInfoMessage(
+            project,
+            "Import complete:\n• $addedKeys new key(s) added\n• $updatedCells cell(s) updated",
+            "Import Done"
+        )
+    }
+
+    // ── Find Duplicates ───────────────────────────────────────────────────────
+
+    /**
+     * Lets the user pick a language, then scans for keys with identical
+     * translation values and shows a summary dialog.
+     */
+    private fun findDuplicates() {
+        if (model.rowCount == 0) return
+
+        val options = model.languages.toTypedArray()
+        val choice = Messages.showChooseDialog(
+            project,
+            "Pick a language to scan for duplicate translation values.",
+            "Find Duplicates",
+            Messages.getQuestionIcon(),
+            options,
+            options[0]
+        )
+        if (choice < 0) return
+
+        val groups = DuplicateDetector.findDuplicates(model, choice)
+
+        if (groups.isEmpty()) {
+            Messages.showInfoMessage(
+                project,
+                "No duplicate values found in '${model.languages[choice]}'.\n" +
+                "Every translated value is unique.",
+                "No Duplicates"
+            )
+            return
+        }
+
+        val summary = buildString {
+            append("Found ${groups.size} group(s) of duplicate values in '${model.languages[choice]}':\n\n")
+            groups.take(20).forEach { group ->
+                val preview = if (group.value.length > 50) group.value.take(50) + "…" else group.value
+                append("\"$preview\"\n")
+                group.keys.forEach { key -> append("   • $key\n") }
+                append("\n")
+            }
+            if (groups.size > 20) append("… and ${groups.size - 20} more group(s)\n")
+            append("Consider consolidating these keys or verifying\n" +
+                   "they are intentionally identical.")
+        }
+        Messages.showInfoMessage(project, summary, "Duplicate Values Found")
+    }
+
+    // ── Rename Key ────────────────────────────────────────────────────────────
+
+    /**
+     * Renames a translation key across all ARB files and updates the
+     * associated @key metadata annotation.
+     */
+    private fun renameSelectedKey(modelRow: Int) {
+        if (modelRow < 0 || modelRow >= model.allKeys.size) return
+        val oldKey = model.allKeys[modelRow]
+
+        val newKey = Messages.showInputDialog(
+            project,
+            "Rename key '$oldKey' to:",
+            "Rename Key",
+            Messages.getQuestionIcon(),
+            oldKey,
+            null
+        )?.trim() ?: return
+
+        when {
+            newKey.isBlank() ->
+                Messages.showErrorDialog(project, "Key must not be empty.", "Invalid Key")
+            newKey == oldKey -> { /* no-op */ }
+            newKey.startsWith("@") ->
+                Messages.showErrorDialog(project,
+                    "Keys starting with '@' are reserved for ARB metadata.", "Invalid Key")
+            model.allKeys.contains(newKey) ->
+                Messages.showErrorDialog(project, "Key '$newKey' already exists.", "Duplicate Key")
+            else -> {
+                // Update metadata key in all arb files
+                arbFiles.forEach { f ->
+                    val meta = f.metadata.remove("@$oldKey")
+                    if (meta != null) f.metadata["@$newKey"] = meta
+                }
+
+                // Update expanded-keys tracking
+                if (expandedKeys.remove(oldKey)) expandedKeys.add(newKey)
+
+                // Rename in model
+                model.renameKey(modelRow, newKey)
+
+                // Save all and refresh
+                isSaving = true
+                try { ArbService.saveAll(model, arbFiles) } finally { isSaving = false }
+                updateStatus()
+                updatePrefixOptions()
+                table.repaint()
+            }
+        }
+    }
+
+    // ── Prefix filter ─────────────────────────────────────────────────────────
+
+    /**
+     * Re-scans all keys and rebuilds the prefix combo options.
+     * Prefixes are extracted from keys containing '_' (e.g. "home_title" → "home_").
+     */
+    private fun updatePrefixOptions() {
+        val previous = prefixCombo.selectedItem?.toString() ?: "All"
+
+        val prefixes = model.allKeys
+            .mapNotNull { key ->
+                val idx = key.indexOf('_')
+                if (idx > 0) key.substring(0, idx + 1) else null
+            }
+            .distinct()
+            .sorted()
+
+        prefixCombo.removeAllItems()
+        prefixCombo.addItem("All")
+        prefixes.forEach { prefixCombo.addItem(it) }
+
+        // Restore previous selection if still valid
+        if (previous != "All" && prefixes.contains(previous)) {
+            prefixCombo.selectedItem = previous
+        }
     }
 
     // ── About ──────────────────────────────────────────────────────────────
@@ -836,6 +1175,8 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             JPopupMenu().apply {
                 add(JMenuItem("Edit Metadata for '$key'…", AllIcons.General.Settings)
                     .also { it.addActionListener { showMetadataDialog(modelRow) } })
+                add(JMenuItem("Rename Key…", AllIcons.Actions.Edit)
+                    .also { it.addActionListener { renameSelectedKey(modelRow) } })
                 addSeparator()
                 add(JMenuItem("Copy Flutter Code").also { item ->
                     item.addActionListener {
@@ -932,7 +1273,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
                 else       -> "▾"
             }
             toggleLabel.foreground = metaFg
-            toggleLabel.font = table.font.deriveFont(java.awt.Font.BOLD, 14f)
+            toggleLabel.font = table.font.deriveFont(Font.BOLD, 14f)
             toggleLabel.verticalAlignment =
                 if (isExpanded) SwingConstants.TOP else SwingConstants.CENTER
 
@@ -1000,10 +1341,11 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         }
     }
 
-    /** Language column header — language name + ✕ icon pinned right. */
-    private class LanguageHeaderRenderer : TableCellRenderer {
+    /** Language column header — language name + progress bar + ✕ icon. */
+    private inner class LanguageHeaderRenderer : TableCellRenderer {
         private val deleteIcon = AllIcons.General.Remove
         private val panel    = JPanel(BorderLayout(2, 0)).apply { isOpaque = true }
+        private val topRow   = JPanel(BorderLayout(2, 0)).apply { isOpaque = false }
         private val nameLabel = JLabel().apply {
             isOpaque = false
             horizontalAlignment = SwingConstants.CENTER
@@ -1014,8 +1356,33 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             border   = BorderFactory.createEmptyBorder(0, 2, 0, 4)
             toolTipText = "Click to delete this language"
         }
+        private val progressBar = object : JPanel() {
+            var ratio = 0f
+            init {
+                preferredSize = Dimension(0, 4)
+                minimumSize   = Dimension(0, 4)
+                isOpaque = true
+                background = JBColor(Color(220, 220, 220), Color(60, 60, 60))
+            }
+            override fun paintComponent(g: java.awt.Graphics) {
+                super.paintComponent(g)
+                val g2 = g as java.awt.Graphics2D
+                val w = (width * ratio).toInt()
+                g2.color = when {
+                    ratio >= 1.0f -> JBColor(Color(60, 180, 80), Color(80, 200, 100))
+                    ratio >= 0.7f -> JBColor(Color(220, 180, 50), Color(200, 170, 50))
+                    else          -> JBColor(Color(220, 80, 80), Color(200, 70, 70))
+                }
+                g2.fillRect(0, 0, w, height)
+            }
+        }
 
-        init { panel.add(nameLabel, BorderLayout.CENTER); panel.add(delLabel, BorderLayout.EAST) }
+        init {
+            topRow.add(nameLabel, BorderLayout.CENTER)
+            topRow.add(delLabel, BorderLayout.EAST)
+            panel.add(topRow, BorderLayout.CENTER)
+            panel.add(progressBar, BorderLayout.SOUTH)
+        }
 
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
@@ -1026,15 +1393,36 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
             panel.background  = UIManager.getColor("TableHeader.background")
                 ?: table.tableHeader.background
             panel.border      = UIManager.getBorder("TableHeader.cellBorder")
-            panel.toolTipText = "Click ✕ to delete this language column"
+
+            // Calculate completion ratio for this language column
+            val langIndex = column - 1
+            if (model.rowCount > 0 && langIndex >= 0 && langIndex < model.languages.size) {
+                val total = model.rowCount
+                val filled = (0 until total).count {
+                    model.getTranslation(it, langIndex).isNotBlank()
+                }
+                val pct = if (total > 0) filled.toFloat() / total else 0f
+                progressBar.ratio = pct
+                progressBar.isVisible = true
+                val pctInt = (pct * 100).toInt()
+                panel.toolTipText = "$filled / $total translated ($pctInt%) — Click ✕ to delete"
+            } else {
+                progressBar.isVisible = false
+                panel.toolTipText = "Click ✕ to delete this language column"
+            }
+            progressBar.repaint()
             return panel
         }
     }
 
-    /** Translation cells — missing values highlighted in soft red. */
-    private class TranslationCellRenderer : TableCellRenderer {
+    /** Translation cells — missing values highlighted in soft red, placeholder issues in orange. */
+    private inner class TranslationCellRenderer : TableCellRenderer {
         private val delegate  = DefaultTableCellRenderer()
         private val missingBg = JBColor(Color(255, 225, 225), Color(85, 30, 30))
+        private val warningBg = JBColor(Color(255, 243, 205), Color(90, 70, 20))
+        private val warningBorder = BorderFactory.createLineBorder(
+            JBColor(Color(230, 160, 50), Color(200, 150, 40)), 2
+        )
 
         override fun getTableCellRendererComponent(
             table: JTable, value: Any?, isSelected: Boolean,
@@ -1042,9 +1430,37 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
         ): Component {
             val comp = delegate.getTableCellRendererComponent(
                 table, value, isSelected, hasFocus, row, column)
-            if (!isSelected)
-                comp.background =
-                    if (value?.toString().isNullOrBlank()) missingBg else table.background
+
+            val modelRow = table.convertRowIndexToModel(row)
+            val langIndex = column - 1
+            val key = model.allKeys.getOrNull(modelRow) ?: ""
+            val language = model.languages.getOrNull(langIndex) ?: ""
+            val issue = validationIssues[key to language]
+
+            if (!isSelected) {
+                when {
+                    issue != null -> {
+                        comp.background = warningBg
+                        (comp as? JLabel)?.border = warningBorder
+                        (comp as? JLabel)?.toolTipText =
+                            "<html><b>⚠ Placeholder issue</b><br>${issue.summary()}</html>"
+                    }
+                    value?.toString().isNullOrBlank() -> {
+                        comp.background = missingBg
+                        (comp as? JLabel)?.border = null
+                        (comp as? JLabel)?.toolTipText = "Missing translation"
+                    }
+                    else -> {
+                        comp.background = table.background
+                        (comp as? JLabel)?.border = null
+                        (comp as? JLabel)?.toolTipText = null
+                    }
+                }
+            } else {
+                (comp as? JLabel)?.toolTipText =
+                    if (issue != null) "<html><b>⚠ Placeholder issue</b><br>${issue.summary()}</html>"
+                    else null
+            }
             return comp
         }
     }

@@ -2,19 +2,140 @@
 <idea-plugin>
     <id>org.jetbrains.plugins.arb-editor</id>
     <name>ARB Editor</name>
-    <vendor>JetBrains</vendor>
-    <description>
-        A synchronized ARB (Application Resource Bundle) translation editor.
-        Open any folder of .arb files and edit all language translations in one
-        table — missing keys are auto-detected and highlighted.
-    </description>
+    <version>1.0.0</version>
+    <vendor email="yusrilrapsanjani@gmail.com" url="https://github.com/YusrilRapsworker">Yusril Rapsanjani</vendor>
+
+    <description><![CDATA[
+<h2>ARB Editor — Flutter Translation Editor</h2>
+
+<p>
+    A powerful, synchronized <b>ARB (Application Resource Bundle)</b> translation editor
+    built for Flutter developers. Open any folder of <code>.arb</code> files and manage
+    all language translations in a single, unified table view — right inside your IDE.
+</p>
+
+<br/>
+
+<h3>✨ Key Features</h3>
+
+<table>
+    <tr>
+        <td>📝</td>
+        <td><b>Synchronized Table Editor</b></td>
+        <td>Edit all languages side-by-side in one table. Changes auto-save instantly to <code>.arb</code> files.</td>
+    </tr>
+    <tr>
+        <td>⚠️</td>
+        <td><b>Missing Translation Detection</b></td>
+        <td>Blank cells are highlighted in red so you never ship an incomplete translation.</td>
+    </tr>
+    <tr>
+        <td>🔍</td>
+        <td><b>Placeholder Validation</b></td>
+        <td>Validates that <code>{placeholder}</code> tokens match across all languages — prevents Flutter runtime crashes.</td>
+    </tr>
+    <tr>
+        <td>📊</td>
+        <td><b>Translation Progress Bars</b></td>
+        <td>Each language column header shows a color-coded completion bar (green / yellow / red).</td>
+    </tr>
+    <tr>
+        <td>📥</td>
+        <td><b>Import &amp; Export CSV</b></td>
+        <td>Export translations for external translators, then import their CSV back with a merge preview.</td>
+    </tr>
+    <tr>
+        <td>✏️</td>
+        <td><b>Key Rename / Refactor</b></td>
+        <td>Rename a key across all <code>.arb</code> files at once, including <code>@key</code> metadata annotations.</td>
+    </tr>
+    <tr>
+        <td>🔎</td>
+        <td><b>Duplicate Detection</b></td>
+        <td>Find translation keys with identical values — catch copy-paste errors or consolidation opportunities.</td>
+    </tr>
+    <tr>
+        <td>🏷️</td>
+        <td><b>Key Grouping &amp; Prefix Filter</b></td>
+        <td>Auto-groups keys by prefix (<code>home_</code>, <code>auth_</code>, <code>settings_</code>) for focused editing.</td>
+    </tr>
+    <tr>
+        <td>📋</td>
+        <td><b>Metadata Editor</b></td>
+        <td>Full <code>@key</code> annotation editor — description, type, and placeholders with auto-detection of <code>{var}</code> tokens.</td>
+    </tr>
+    <tr>
+        <td>📂</td>
+        <td><b>Recent Folders &amp; Welcome Screen</b></td>
+        <td>Quick access to recent ARB folders with stats (keys, languages, missing count) at a glance.</td>
+    </tr>
+</table>
+
+<br/>
+
+<h3>🛠️ More Tools</h3>
+<ul>
+    <li><b>Sort A→Z</b> — Alphabetical key sorting across all files</li>
+    <li><b>Fill from Reference</b> — Copy a reference language into blank cells as a translation placeholder</li>
+    <li><b>Add / Delete Key</b> — Manage keys across all ARB files at once</li>
+    <li><b>Add / Delete Language</b> — Create or remove <code>.arb</code> language files</li>
+    <li><b>Copy Flutter Code</b> — Right-click to copy <code>AppLocalizations.of(context)!.keyName</code></li>
+    <li><b>Expandable Metadata Rows</b> — Click ▾ to inline-preview description, type, and placeholders</li>
+</ul>
+
+<br/>
+
+<h3>📸 Screenshots</h3>
+<p>
+    <img src="https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/editor_table.png"
+         alt="ARB Editor — Table View" width="700"/>
+</p>
+<p>
+    <img src="https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/welcome_screen.png"
+         alt="ARB Editor — Welcome Screen" width="700"/>
+</p>
+<p>
+    <img src="https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/tools_menu.png"
+         alt="ARB Editor — Tools Menu" width="700"/>
+</p>
+
+<br/>
+
+<h3>🚀 Getting Started</h3>
+<ol>
+    <li>Open the <b>ARB Editor</b> tool window (right sidebar)</li>
+    <li>Click <b>"Select ARB Folder"</b> and choose your <code>lib/l10n/</code> directory</li>
+    <li>Edit translations directly in the table — changes save automatically</li>
+</ol>
+
+<br/>
+<p><em>Built with ❤️ for the Flutter community by Yusril Rapsanjani.</em></p>
+    ]]></description>
+
+    <change-notes><![CDATA[
+<h3>3.0.0 — 2026-03-27</h3>
+<h4>Added</h4>
+<ul>
+    <li><b>Placeholder Validation</b> — Detect missing or extra <code>{placeholder}</code> tokens across languages. Cells with issues are highlighted in orange with detailed tooltips.</li>
+    <li><b>Import CSV</b> — Import translations from a CSV file with a merge preview dialog. Supports adding new keys and new languages automatically.</li>
+    <li><b>Translation Progress Bars</b> — Color-coded completion bars in each language column header (green ≥100%, yellow ≥70%, red &lt;70%).</li>
+    <li><b>Key Rename / Refactor</b> — Rename a translation key across all ARB files and <code>@key</code> metadata via right-click context menu.</li>
+    <li><b>Duplicate Value Detection</b> — Scan a language for keys sharing identical translations to find copy-paste errors.</li>
+    <li><b>Key Grouping / Prefix Filter</b> — Filter keys by auto-detected prefix groups (<code>home_</code>, <code>auth_</code>, etc.) via dropdown.</li>
+</ul>
+<h4>Changed</h4>
+<ul>
+    <li>Reorganized toolbar into a clean two-row layout with a <b>Tools ▾</b> dropdown for less-frequent actions.</li>
+    <li>Search field now stretches to fill available width for easier filtering.</li>
+</ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
             id="ARB Editor"
-            factoryClass="org.jetbrains.plugins.template.arb.ArbToolWindowFactory"
+            factoryClass="com.yurani.arbeditor.arb.ArbToolWindowFactory"
             anchor="right"
             icon="/icons/arb_editor.svg"
         />

@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.arb
+package com.yurani.arbeditor.arb
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow

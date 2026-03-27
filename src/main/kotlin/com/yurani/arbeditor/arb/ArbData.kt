@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.arb
+package com.yurani.arbeditor.arb
 
 import javax.swing.table.AbstractTableModel
 
@@ -52,6 +52,13 @@ class ArbTableModel(
         allKeys.removeAt(row)
         data.removeAt(row)
         fireTableRowsDeleted(row, row)
+    }
+
+    /** Renames the key at [row] to [newKey] and fires a cell-update event. */
+    fun renameKey(row: Int, newKey: String) {
+        if (row < 0 || row >= allKeys.size) return
+        allKeys[row] = newKey
+        fireTableCellUpdated(row, 0)
     }
 
     // ── Bulk operations ──────────────────────────────────────────────────────

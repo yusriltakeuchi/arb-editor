@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.arb
+package com.yurani.arbeditor.arb
 
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
