@@ -20,5 +20,3 @@
 - Search field now uses `BorderLayout.CENTER` and stretches to fill all available width.
 - Translation cell renderer upgraded to show placeholder validation warnings (orange background + border + tooltip).
 - Language header renderer upgraded to inner class with access to model for progress bar calculation.
-
-[1.0.0]: https://github.com/YusrilRapsworker/arb-editor/commits/v3.0.0

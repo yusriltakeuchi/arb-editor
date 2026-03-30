@@ -56,7 +56,7 @@ Open any folder of `.arb` files and manage all language translations in a single
 ## Installation
 
 - **JetBrains Marketplace** — Search for "ARB Editor" in <kbd>Settings</kbd> → <kbd>Plugins</kbd> → <kbd>Marketplace</kbd>.
-- **Manual** — Download the latest release `.zip` from [Releases](https://github.com/YusrilRapsworker/arb-editor/releases) and install via <kbd>Settings</kbd> → <kbd>Plugins</kbd> → <kbd>⚙️</kbd> → <kbd>Install Plugin from Disk…</kbd>
+- **Manual** — Download the latest release `.zip` from [Releases](https://github.com/yusriltakeuchi/arb-editor/releases) and install via <kbd>Settings</kbd> → <kbd>Plugins</kbd> → <kbd>⚙️</kbd> → <kbd>Install Plugin from Disk…</kbd>
 
 ## Requirements
 
