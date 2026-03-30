@@ -32,18 +32,6 @@ Open any folder of `.arb` files and manage all language translations in a single
 - **Copy Flutter Code** — Right-click to copy `AppLocalizations.of(context)!.keyName`
 - **Expandable Metadata Rows** — Click ▾ to inline-preview description, type, and placeholders
 
-### 📸 Screenshots
-
-![ARB Editor — Screenshot 1](screenshots/Screenshot-1.png)
-
-![ARB Editor — Screenshot 2](screenshots/Screenshot-2.png)
-
-![ARB Editor — Screenshot 3](screenshots/Screenshot-3.png)
-
-![ARB Editor — Screenshot 4](screenshots/Screenshot-4.png)
-
-![ARB Editor — Screenshot 5](screenshots/Screenshot-5.png)
-
 ### 🚀 Getting Started
 
 1. Open the **ARB Editor** tool window (right sidebar)
