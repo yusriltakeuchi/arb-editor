@@ -1,6 +1,6 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>org.jetbrains.plugins.arb-editor</id>
+    <id>com.yurani.arbeditor</id>
     <name>ARB Editor</name>
     <version>1.0.0</version>
     <vendor email="yusrilrapsanjani@gmail.com" url="https://github.com/YusrilRapsworker">Yusril Rapsanjani</vendor>
