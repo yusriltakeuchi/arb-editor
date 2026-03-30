@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.yurani.arbeditor</id>
     <name>ARB Editor</name>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <vendor email="yusrilrapsanjani@gmail.com" url="https://github.com/YusrilRapsworker">Yusril Rapsanjani</vendor>
 
     <description><![CDATA[

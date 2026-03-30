@@ -2,6 +2,12 @@
 
 # ARB Editor Changelog
 
+## [1.0.1] - 2026-03-30
+
+### Update
+
+- Update readme
+
 ## [1.0.0] - 2026-03-27
 
 ### Added

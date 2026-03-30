@@ -1097,7 +1097,7 @@ class ArbEditorPanel(private val project: Project) : JPanel(BorderLayout(0, 4)) 
     private fun showAboutDialog() {
         Messages.showInfoMessage(
             project,
-            "ARB Editor v1.0.0\n" +
+            "ARB Editor v1.0.1\n" +
             "Author: Yusril Rapsanjani\n" +
             "Released: 2026\n\n" +
             "A synchronized ARB translation editor.\n" +
