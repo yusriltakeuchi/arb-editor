@@ -34,11 +34,15 @@ Open any folder of `.arb` files and manage all language translations in a single
 
 ### 📸 Screenshots
 
-![ARB Editor — Table View](https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/editor_table.png)
+![ARB Editor — Screenshot 1](screenshots/Screenshot-1.png)
 
-![ARB Editor — Welcome Screen](https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/welcome_screen.png)
+![ARB Editor — Screenshot 2](screenshots/Screenshot-2.png)
 
-![ARB Editor — Tools Menu](https://raw.githubusercontent.com/YusrilRapsworker/arb-editor/main/screenshots/tools_menu.png)
+![ARB Editor — Screenshot 3](screenshots/Screenshot-3.png)
+
+![ARB Editor — Screenshot 4](screenshots/Screenshot-4.png)
+
+![ARB Editor — Screenshot 5](screenshots/Screenshot-5.png)
 
 ### 🚀 Getting Started
 
